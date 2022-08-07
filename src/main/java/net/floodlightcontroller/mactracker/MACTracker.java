@@ -1,7 +1,7 @@
 package net.floodlightcontroller.mactracker;
 
 import java.util.Collection;
-
+import java.util.HashMap;
 import java.util.Map;
 
 import org.projectfloodlight.openflow.protocol.OFMessage;
@@ -22,8 +22,20 @@ import net.floodlightcontroller.core.module.IFloodlightModule;
 import net.floodlightcontroller.core.module.IFloodlightService;
 
 import net.floodlightcontroller.core.IFloodlightProviderService;
+
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.Set;
 
 import net.floodlightcontroller.packet.ARP;
@@ -31,9 +43,13 @@ import net.floodlightcontroller.packet.Ethernet;
 import net.floodlightcontroller.packet.IPv4;
 import net.floodlightcontroller.packet.TCP;
 import net.floodlightcontroller.packet.UDP;
+//import net.floodlightcontroller.statistics.StatisticsCollector.PortStatsCollector;
+import net.floodlightcontroller.threadpool.*;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import static java.util.concurrent.TimeUnit.*;
 
 
 
@@ -42,6 +58,11 @@ public class MACTracker implements IOFMessageListener, IFloodlightModule {
 	protected IFloodlightProviderService floodlightProvider;
 	protected Set<Long> macAddresses;
 	protected static Logger logger;
+	public int packetInCounter = 0;
+	public int packetInPre = 0;
+	public int packetInNow = 0;
+	private static IThreadPoolService threadPoolService;
+	
 
 	@Override
 	public String getName() {
@@ -93,9 +114,36 @@ public class MACTracker implements IOFMessageListener, IFloodlightModule {
 	public void startUp(FloodlightModuleContext context) throws FloodlightModuleException {
 		// TODO Auto-generated method stub
 		floodlightProvider.addOFMessageListener(OFType.PACKET_IN, this);
-
+		
+		// Start new thread to count packet in
+        ScheduledExecutorService PICounter = Executors.newScheduledThreadPool(1);
+        Runnable piCounter = new Runnable() {
+            public void run() { 
+            	packetInCounter = packetInNow - packetInPre;
+            	packetInPre = packetInNow;
+            	
+            	try {
+                	File file = new File("/home/cuong/FIL/packeIn_counter.csv");
+                	FileWriter fw = new FileWriter(file, true);
+                	BufferedWriter bw = new BufferedWriter(fw);
+                	PrintWriter pw = new PrintWriter(bw);
+                	logger.info("Packet in counter is called !");
+                	pw.println(packetInCounter);	                	
+                	pw.close();
+                }catch(IOException ioe){
+                	System.out.println("Exception occurred:");
+                    ioe.printStackTrace();
+                }
+            	
+            }
+        }; 
+        ScheduledFuture<?> piCounterHandle =
+        		PICounter.scheduleAtFixedRate(piCounter, 1, 1, SECONDS);
+        PICounter.schedule(new Runnable() {
+                    public void run() { piCounterHandle.cancel(true); }
+                }, 60 * 60, SECONDS);
 	}
-
+	
 	@Override
 	public Command receive(IOFSwitch sw, OFMessage msg, FloodlightContext cntx) {
 		// TODO Auto-generated method stub
@@ -133,7 +181,31 @@ public class MACTracker implements IOFMessageListener, IFloodlightModule {
 	                short flags = tcp.getFlags();
 	                 
 	                /* Your logic here! */
-//	                logger.info("TCP Source Port: {}, TCP Destination Port: {}",srcPort.toString(), dstPort.toString());
+	                /* Count number of packet in */
+	                packetInNow ++; 
+	                logger.info("TCP Source Port: {}, TCP Destination Port: {}",srcPort.toString(), dstPort.toString());
+	                
+	                /* Write source port and destination port to file */
+//	                
+//	                Map<String, String> stats = new HashMap<>()	;
+//	                stats.put(srcPort.toString(), dstPort.toString());
+////	                count ++;
+//	                try {
+//	                	File file = new File("/home/cuong/FIL/packeIn_counter.csv");
+//	                	FileWriter fw = new FileWriter(file, true);
+//	                	BufferedWriter bw = new BufferedWriter(fw);
+//	                	PrintWriter pw = new PrintWriter(bw);
+//	                	logger.info("Prtint Writer is called !");
+////	                Add a new line to the file content
+////	                	pw.println("");
+//	                	pw.println(srcPort.toString() +"," + dstPort.toString() + "," + packetInCounter + "," + packetInNow);	                	
+//	                	pw.close();
+//	                }catch(IOException ioe){
+//	                	System.out.println("Exception occurred:");
+//	                    ioe.printStackTrace();
+//	                }
+	                	                
+	                                
 	            } else if (ipv4.getProtocol() == IpProtocol.UDP) {
 	                /* We got a UDP packet; get the payload from IPv4 */
 	                UDP udp = (UDP) ipv4.getPayload();

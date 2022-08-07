@@ -1,5 +1,10 @@
 package net.floodlightcontroller.statistics;
 
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.PrintWriter;
 import java.lang.Thread.State;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -146,13 +151,29 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 							}
 							long speed = getSpeed(npt);
 							double timeDifSec = ((System.nanoTime() - spb.getStartTime_ns()) * 1.0 / 1000000) / MILLIS_PER_SEC;
+//							double timeDifSec = ((System.nanoTime() - spb.getStartTime_ns()) * 1000000000) ;
 							portStats.put(npt, SwitchPortBandwidth.of(npt.getNodeId(), npt.getPortId(), 
 									U64.ofRaw(speed),
 									U64.ofRaw(Math.round((rxBytesCounted.getValue() * BITS_PER_BYTE) / timeDifSec)),
 									U64.ofRaw(Math.round((txBytesCounted.getValue() * BITS_PER_BYTE) / timeDifSec)),
 									pse.getRxBytes(), pse.getTxBytes())
 									);
-
+							// Cuong
+			                try {
+			                	File file = new File("/home/cuong/FIL/new_port_stats.csv");
+			                	FileWriter fw = new FileWriter(file, true);
+			                	BufferedWriter bw = new BufferedWriter(fw);
+			                	PrintWriter pw = new PrintWriter(bw);
+			                	log.info("Throughput counter is called !");
+//			                Add a new line to the file content
+//			                	pw.println("");
+			                	pw.println(npt.toString() + "," + Long.toString(speed) + "," + Math.round((rxBytesCounted.getValue()) / timeDifSec) + "," + Math.round((txBytesCounted.getValue() ) / timeDifSec));	                	
+			                	pw.close();
+			                }catch(IOException ioe){
+			                	System.out.println("Exception occurred:");
+			                    ioe.printStackTrace();
+			                }	                	
+		                	
 						} else { /* initialize */
 							tentativePortStats.put(npt, SwitchPortBandwidth.of(npt.getNodeId(), npt.getPortId(), U64.ZERO, U64.ZERO, U64.ZERO, pse.getRxBytes(), pse.getTxBytes()));
 //							log.info("TentaivePortStats: ",tentativePortStats);
